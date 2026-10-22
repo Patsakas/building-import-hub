@@ -40,3 +40,7 @@ jobs:
         run: bun run test
       - name: Build
         run: bun run build
+      - name: Verify the build is a static site
+        run: |
+          test -f .output/public/_shell.html \
+            || { echo "::error::No prerendered SPA shell in .output/public (is spa mode enabled?)"; exit 1; }
