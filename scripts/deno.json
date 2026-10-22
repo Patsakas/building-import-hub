@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@std/toml": "jsr:@std/toml@1.0.11",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
+    "zod": "npm:zod@3.25.76"
+  },
+  "nodeModulesDir": "none"
+}
