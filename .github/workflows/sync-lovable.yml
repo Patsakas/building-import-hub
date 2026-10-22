@@ -1,0 +1,47 @@
+# Lovable edits and syncs the `lovable` branch; changes reach `main` through reviewed pull
+# requests. This brings engineering changes merged into `main` back to `lovable`, so people
+# building in Lovable always work on top of the latest reviewed code.
+#
+# A plain merge, never a rebase or force push: Lovable warns that rewriting a synced branch's
+# history loses project history. On a conflict nothing is pushed and the run fails, so a person
+# resolves it (merge main into lovable locally, fix, push).
+name: Sync main into lovable
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-lovable
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge main into lovable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: lovable
+          fetch-depth: 0
+
+      - name: Merge main into lovable
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "lovable already contains main; nothing to do."
+            exit 0
+          fi
+          if ! git merge --no-edit origin/main; then
+            git merge --abort
+            echo "::error::main cannot be merged into lovable automatically (conflict). Merge it by hand: git checkout lovable && git merge origin/main, resolve, push."
+            exit 1
+          fi
+          git push origin HEAD:lovable
+          echo "lovable now includes main at $(git rev-parse --short origin/main)."
