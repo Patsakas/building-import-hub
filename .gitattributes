@@ -1,0 +1,4 @@
+# Keep LF line endings on every platform (Prettier enforces LF; Windows checkouts default to CRLF).
+* text=auto eol=lf
+*.ico binary
+*.xlsx binary
