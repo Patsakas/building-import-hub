@@ -10,7 +10,8 @@ enable_signup = false
 minimum_password_length = 12
 
 [auth.email]
-enable_signup = false
+# Do not set enable_signup here: the CLI maps it to the whole email provider, so `false` would
+# disable email *login* too. [auth] enable_signup above already blocks new sign-ups.
 enable_confirmations = true
 
 [functions.import-buildings]
