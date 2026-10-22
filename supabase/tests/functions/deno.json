@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.118.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
+  },
+  "nodeModulesDir": "none"
+}
