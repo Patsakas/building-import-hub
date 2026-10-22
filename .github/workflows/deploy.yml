@@ -6,10 +6,12 @@
 #   manual run         -> the environment you pick
 #
 # Each GitHub environment holds its own configuration:
-#   variables: SUPABASE_PROJECT_REF, VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY,
-#              VITE_SUPABASE_PROJECT_ID, FIREBASE_PROJECT_ID, SITE_URL,
-#              GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT
-#   secrets:   SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD
+#   variables: SUPABASE_PROJECT_REF, SUPABASE_DB_POOLER_HOST, VITE_SUPABASE_URL,
+#              VITE_SUPABASE_PUBLISHABLE_KEY, VITE_SUPABASE_PROJECT_ID, FIREBASE_PROJECT_ID,
+#              SITE_URL, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT
+#   secrets:   SUPABASE_ACCESS_TOKEN (project-scoped: Project Settings read, Auth Config
+#              read-write, Edge Functions read-write, read on the other config sections),
+#              SUPABASE_DB_PASSWORD (migrations connect to Postgres directly, not via the API)
 name: Deploy
 
 on:
@@ -48,6 +50,7 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_POOLER_HOST: ${{ vars.SUPABASE_DB_POOLER_HOST }}
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       VITE_SUPABASE_PROJECT_ID: ${{ vars.VITE_SUPABASE_PROJECT_ID }}
@@ -68,18 +71,36 @@ jobs:
         run: |
           missing=""
           for name in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF \
-            VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PROJECT_ID SITE_URL; do
+            SUPABASE_DB_POOLER_HOST VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY \
+            VITE_SUPABASE_PROJECT_ID SITE_URL; do
             [ -n "${!name}" ] || missing="$missing $name"
           done
           [ -z "$missing" ] || { echo "::error::Missing environment configuration:$missing"; exit 1; }
 
+      # Read-only calls to every Management API endpoint this job uses, so a token missing a
+      # permission fails here, before anything changes, with the full list of what is missing.
+      - name: Preflight - access token permissions
+        run: |
+          api="https://api.supabase.com"
+          failed=0
+          for endpoint in "v1/projects/$SUPABASE_PROJECT_REF" "v2/projects/$SUPABASE_PROJECT_REF/config" \
+            "v1/projects/$SUPABASE_PROJECT_REF/config/auth" "v1/projects/$SUPABASE_PROJECT_REF/functions"; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "$api/$endpoint")
+            echo "$status GET /$endpoint"
+            [ "$status" = "200" ] || failed=1
+          done
+          [ "$failed" = "0" ] || { echo "::error::The Supabase access token cannot read every endpoint the deploy needs (see above)."; exit 1; }
+
       # Backend first: the new frontend may depend on new tables or functions, never the reverse.
-      - name: Link the Supabase project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      # Migrations go straight to Postgres through the IPv4 session pooler (runners have no IPv6),
+      # so the API token needs no database permissions at all.
       - name: Apply database migrations
         run: |
-          supabase db push --linked --dry-run
-          supabase db push --linked --yes
+          password=$(jq -rn --arg p "$SUPABASE_DB_PASSWORD" '$p | @uri')
+          echo "::add-mask::$password" # the encoded form differs from the masked secret
+          db_url="postgresql://postgres.$SUPABASE_PROJECT_REF:$password@$SUPABASE_DB_POOLER_HOST:5432/postgres"
+          supabase db push --db-url "$db_url" --dry-run
+          supabase db push --db-url "$db_url" --yes
       - name: Apply auth and function settings from config.toml
         run: |
           supabase config diff --project-ref "$SUPABASE_PROJECT_REF"
