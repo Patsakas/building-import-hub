@@ -14,3 +14,6 @@ src/components/ui/
 # Lovable-managed docs (AGENTS.md holds a LOVABLE:BEGIN/END block that Lovable rewrites).
 AGENTS.md
 src/routes/README.md
+
+# Generated lockfiles
+deno.lock

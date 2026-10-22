@@ -44,3 +44,48 @@ jobs:
         run: |
           test -f .output/public/_shell.html \
             || { echo "::error::No prerendered SPA shell in .output/public (is spa mode enabled?)"; exit 1; }
+      # TanStack Start lists every createServerFn in a manifest next to getServerFnById. Static
+      # hosting has no server to run them, so the manifest must be empty.
+      - name: Verify the build has no server functions
+        run: |
+          files=$(grep -rlE 'function getServerFnById' .output/server || true)
+          if [ -z "$files" ]; then
+            echo "::error::Server function manifest not found; update this check for the new TanStack Start output."
+            exit 1
+          fi
+          if ! grep -qE '^var manifest = \{\};$' $files; then
+            echo "::error::The build contains TanStack server functions (createServerFn), which cannot run on static hosting. Move them to a Supabase Edge Function."
+            grep -A3 '^var manifest' $files
+            exit 1
+          fi
+
+  edge-functions:
+    name: Edge Functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Remote module hosts the functions may import from; anything else must be added on purpose.
+      ALLOWED_IMPORTS: cdn.sheetjs.com,jsr.io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.x
+
+      # Every function has its own deno.json and committed deno.lock (--frozen fails on drift).
+      - name: Lint, typecheck and test each function
+        run: |
+          for config in supabase/functions/*/deno.json; do
+            dir=$(dirname "$config")
+            echo "::group::$dir"
+            deno lint --config "$config" "$dir"
+            deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" "$dir/index.ts"
+            deno test --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" \
+              --allow-read=public --permit-no-files "$dir"
+            echo "::endgroup::"
+          done
+      - name: Lint and typecheck scripts
+        run: |
+          config=supabase/functions/import-buildings/deno.json
+          deno lint --config "$config" scripts
+          deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" scripts/*.ts

@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
-import { importBuildings, TEMPLATE_COLUMNS } from "@/lib/buildings.functions";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -40,22 +40,19 @@ export const Route = createFileRoute("/_authenticated/buildings")({
   component: BuildingsPage,
 });
 
-function downloadTemplate() {
-  const ws = XLSX.utils.aoa_to_sheet([
-    [...TEMPLATE_COLUMNS],
-    ["Example Tower", "1 Main St", "Athens", "Greece", 12, 1998],
-  ]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Buildings");
-  XLSX.writeFile(wb, "buildings-template.xlsx");
-}
+// Mirrors the limit enforced by the import-buildings Edge Function, to fail fast before uploading.
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-function toBase64(buf: ArrayBuffer) {
-  const bytes = new Uint8Array(buf);
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
+type ImportError = { row: number | null; column: string | null; message: string };
+type ImportFailure = { message?: string; errors?: ImportError[]; errorCount?: number };
+
+async function readImportFailure(error: unknown): Promise<ImportFailure | null> {
+  if (!(error instanceof FunctionsHttpError)) return null;
+  try {
+    return (await error.context.json()) as ImportFailure;
+  } catch {
+    return null;
+  }
 }
 
 function BuildingsPage() {
@@ -64,19 +61,40 @@ function BuildingsPage() {
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [rejected, setRejected] = useState<{ errors: ImportError[]; errorCount: number } | null>(
+    null,
+  );
 
   async function onFile(file: File) {
+    setRejected(null);
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error("The file is larger than 5 MB.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setBusy(true);
     try {
-      const res = await importBuildings({
-        data: { fileBase64: toBase64(await file.arrayBuffer()) },
-      });
-      toast.success(
-        `Imported ${res.inserted} buildings${res.skipped ? `, skipped ${res.skipped} without a name` : ""}.`,
+      const body = new FormData();
+      body.append("file", file);
+      const { data, error } = await supabase.functions.invoke<{ inserted: number }>(
+        "import-buildings",
+        { body },
       );
+      if (error) {
+        const failure = await readImportFailure(error);
+        if (failure?.errors?.length) {
+          setRejected({
+            errors: failure.errors,
+            errorCount: failure.errorCount ?? failure.errors.length,
+          });
+          toast.error("Nothing was imported. Fix the rows listed below and try again.");
+        } else {
+          toast.error(failure?.message ?? "The import failed. Please try again.");
+        }
+        return;
+      }
+      toast.success(`Imported ${data?.inserted ?? 0} buildings.`);
       await qc.invalidateQueries({ queryKey: ["buildings"] });
-    } catch (e) {
-      toast.error((e as Error).message);
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -98,8 +116,10 @@ function BuildingsPage() {
           <p className="text-sm text-muted-foreground">{buildings.length} total</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={downloadTemplate}>
-            Download Excel template
+          <Button variant="outline" asChild>
+            <a href="/buildings-template.xlsx" download>
+              Download Excel template
+            </a>
           </Button>
           <Button disabled={busy} onClick={() => fileRef.current?.click()}>
             {busy ? "Importing…" : "Import Excel"}
@@ -116,6 +136,28 @@ function BuildingsPage() {
           </Button>
         </div>
       </header>
+
+      {rejected && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTitle>
+            Nothing was imported: {rejected.errorCount}{" "}
+            {rejected.errorCount === 1 ? "problem" : "problems"} found
+          </AlertTitle>
+          <AlertDescription>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {rejected.errors.map((e, i) => (
+                <li key={i}>
+                  {e.row !== null && `Row ${e.row}: `}
+                  {e.message}
+                </li>
+              ))}
+            </ul>
+            {rejected.errorCount > rejected.errors.length && (
+              <p className="mt-2">…and {rejected.errorCount - rejected.errors.length} more.</p>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="rounded-xl border bg-card">
         <Table>
