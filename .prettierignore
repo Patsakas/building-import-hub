@@ -6,3 +6,11 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Generated code: owned by Lovable (Supabase integration) and the shadcn/ui template.
+src/integrations/supabase/
+src/components/ui/
+
+# Lovable-managed docs (AGENTS.md holds a LOVABLE:BEGIN/END block that Lovable rewrites).
+AGENTS.md
+src/routes/README.md

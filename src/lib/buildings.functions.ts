@@ -3,7 +3,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import * as XLSX from "xlsx";
 import { z } from "zod";
 
-export const TEMPLATE_COLUMNS = ["name", "address", "city", "country", "floors", "year_built"] as const;
+export const TEMPLATE_COLUMNS = [
+  "name",
+  "address",
+  "city",
+  "country",
+  "floors",
+  "year_built",
+] as const;
 
 function toInt(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
@@ -34,7 +41,8 @@ export const importBuildings = createServerFn({ method: "POST" })
     const rows = raw
       .map((r) => {
         const norm: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(r)) norm[k.trim().toLowerCase().replace(/\s+/g, "_")] = v;
+        for (const [k, v] of Object.entries(r))
+          norm[k.trim().toLowerCase().replace(/\s+/g, "_")] = v;
         return {
           user_id: context.userId,
           name: toText(norm["name"]),
