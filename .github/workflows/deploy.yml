@@ -1,6 +1,6 @@
-# Deploys one environment: database migrations and auth settings, the Edge Functions, then the
-# static frontend to Firebase Hosting, followed by a smoke test of the live site. The full CI
-# suite runs first on the same commit.
+# Deploys one environment: database migrations, the Edge Functions, then the static frontend to
+# Firebase Hosting, followed by a smoke test of the live site. The full CI suite runs first on the
+# same commit, and nothing changes unless the access token and the auth settings check out.
 #
 #   release published  -> production (the "production" environment requires an approval)
 #   manual run         -> the environment you pick
@@ -10,7 +10,7 @@
 #              VITE_SUPABASE_PUBLISHABLE_KEY, VITE_SUPABASE_PROJECT_ID, FIREBASE_PROJECT_ID,
 #              SITE_URL, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT
 #   secrets:   SUPABASE_ACCESS_TOKEN (scoped to one project: Project Settings read, Auth Config
-#              read-write, Edge Functions read-write; nothing else),
+#              read, Edge Functions read-write; nothing else),
 #              SUPABASE_DB_PASSWORD (migrations connect to Postgres directly, not via the API)
 name: Deploy
 
@@ -93,6 +93,13 @@ jobs:
             [ "$status" = "200" ] || failed=1
           done
           [ "$failed" = "0" ] || { echo "::error::The Supabase access token cannot read every endpoint the deploy needs (see above)."; exit 1; }
+      # The [auth] settings in supabase/config.toml, plus this environment's site URL, are verified
+      # here but never changed: Supabase only lets a token that could also delete the project change
+      # them, so an administrator applies them (docs/RUNBOOK.md, "Change auth settings").
+      - name: Verify auth settings
+        run: >-
+          deno run --frozen --config scripts/deno.json --allow-read=supabase --allow-env
+          --allow-net=api.supabase.com scripts/apply-auth-config.ts --check
 
       # Backend first: the new frontend may depend on new tables or functions, never the reverse.
       # Migrations go straight to Postgres through the IPv4 session pooler (runners have no IPv6),
@@ -104,13 +111,6 @@ jobs:
           db_url="postgresql://postgres.$SUPABASE_PROJECT_REF:$password@$SUPABASE_DB_POOLER_HOST:5432/postgres"
           supabase db push --db-url "$db_url" --dry-run
           supabase db push --db-url "$db_url" --yes
-      # The [auth] settings from supabase/config.toml plus this environment's site URL, applied with
-      # one call that needs only Auth Config access, then read back and verified. (`supabase config
-      # push` reads the project's whole configuration and so needs a much broader token.)
-      - name: Apply auth settings
-        run: >-
-          deno run --frozen --config scripts/deno.json --allow-read=supabase --allow-env
-          --allow-net=api.supabase.com scripts/apply-auth-config.ts
       - name: Deploy Edge Functions
         run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
 

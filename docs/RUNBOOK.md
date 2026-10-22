@@ -45,13 +45,38 @@ them (foreign key `on delete cascade`).
 
 | Credential              | Where                                     | Scope                                                                                                                                              | Rotation                                                                                                       |
 | ----------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_ACCESS_TOKEN` | GitHub environment secret                 | One project. Project Settings read, Auth Config and Edge Functions read-write; nothing else (no database, API key or signing key access).          | Expires after 90 days: generate a new one with the same permissions, replace the secret, delete the old token. |
+| `SUPABASE_ACCESS_TOKEN` | GitHub environment secret                 | One project. Project Settings and Auth Config read, Edge Functions read-write; nothing else (no database, API key or signing key access).          | Expires after 90 days: generate a new one with the same permissions, replace the secret, delete the old token. |
+| Admin access token      | nowhere: created when needed              | One project. Project Settings and Auth Config read-write, only to change auth settings (below)                                                     | Shortest expiry; deleted right after use.                                                                      |
 | `SUPABASE_DB_PASSWORD`  | GitHub environment secret                 | Postgres, used only to apply migrations                                                                                                            | Reset in _Project Settings → Database_, then update the secret.                                                |
 | Google Cloud            | none stored                               | Workload Identity Federation: only this repository's `production` environment can act as `github-deployer`, which can only deploy Firebase Hosting | Nothing to rotate.                                                                                             |
 | Publishable key         | GitHub environment variable, in the build | Public by design; RLS protects the data                                                                                                            | Rotate in Supabase if needed, update the variable, redeploy.                                                   |
 
 The deploy job's first step checks the access token: it calls every Management API endpoint the
 deploy uses, prints the status of each and stops before changing anything if one is missing.
+
+### Change auth settings
+
+Sign-up, password length and email confirmation are declared in `supabase/config.toml`, the site
+URL in the environment's `SITE_URL`. Every deploy verifies them and stops, before changing
+anything, if the environment differs, listing each difference. The deploy cannot change them
+itself: Supabase requires _Project Settings: read-write_ for that, which also allows deleting the
+project. An administrator applies them:
+
+1. Supabase → _Account → Access Tokens_: generate a token for that one project with _Auth Config_
+   and _Project Settings_ read-write, and the shortest expiry.
+2. Apply the settings (the token is pasted at the prompt, so it is not echoed or kept in history):
+
+   ```sh
+   read -rs SUPABASE_ACCESS_TOKEN && export SUPABASE_ACCESS_TOKEN
+   SUPABASE_PROJECT_REF=<project ref> SITE_URL=https://<site>.web.app \
+     deno run --config scripts/deno.json --allow-read=supabase --allow-env \
+     --allow-net=api.supabase.com scripts/apply-auth-config.ts
+   unset SUPABASE_ACCESS_TOKEN
+   ```
+
+3. Delete the token, then run (or re-run) the deploy.
+
+When a pull request changes these settings, apply them right after merging it.
 
 ### Workload Identity Federation (how production was set up)
 
@@ -87,7 +112,8 @@ ids rather than names means a repository recreated under the same name cannot de
    `assertion.environment == 'staging'`.
 3. Create a GitHub environment with the variables and secrets listed at the top of
    `.github/workflows/deploy.yml`. Generate a separate access token scoped to the new project.
-4. Run the Deploy workflow for it.
+4. Apply the auth settings to the new project (see _Change auth settings_).
+5. Run the Deploy workflow for it.
 
 ## Troubleshooting
 

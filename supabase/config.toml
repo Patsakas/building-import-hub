@@ -1,7 +1,8 @@
 project_id = "svfcfhhjvweaexspekwe"
 
-# The [auth] settings below are applied to the deployed projects by scripts/apply-auth-config.ts
-# (which fails on any setting it cannot map), and verify_jwt by `supabase functions deploy`. Keep
+# The [auth] settings below also hold for the deployed projects: every deploy verifies them and an
+# administrator applies changes, both with scripts/apply-auth-config.ts (which fails on any setting
+# it cannot map); see docs/RUNBOOK.md. verify_jwt is applied by `supabase functions deploy`. Keep
 # this file to settings that are the same in every environment; per-environment values (site_url,
 # redirect URLs) come from the deploy workflow.
 
