@@ -75,14 +75,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # Remote module hosts the functions may import from; anything else must be added on purpose.
-      ALLOWED_IMPORTS: cdn.sheetjs.com,jsr.io
+      # Remote module hosts the functions may import from. Supabase's bundler refuses most hosts
+      # (cdn.sheetjs.com, for one), so only add a host after deploying a function that uses it;
+      # libraries served from elsewhere are vendored under supabase/functions/_shared/vendor.
+      ALLOWED_IMPORTS: jsr.io
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.x
 
+      - name: Vendored libraries are unmodified
+        run: |
+          for sums in supabase/functions/_shared/vendor/*/SHA256SUMS; do
+            (cd "$(dirname "$sums")" && sha256sum --check --strict SHA256SUMS)
+          done
       # Every function has its own deno.json and committed deno.lock (--frozen fails on drift).
       - name: Lint, typecheck and test each function
         run: |
@@ -139,7 +146,7 @@ jobs:
           eval "$(supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
           SUPABASE_URL="$API_URL" SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" \
             deno test --frozen --config supabase/tests/functions/deno.json \
-              --allow-net --allow-env --allow-import=cdn.sheetjs.com,jsr.io supabase/tests/functions
+              --allow-net --allow-env --allow-import=jsr.io supabase/tests/functions
 
       # End-to-end: the static build against the local stack, served by the Firebase Hosting
       # emulator with the production rewrites, driven by Playwright.

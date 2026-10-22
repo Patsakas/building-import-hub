@@ -1,7 +1,7 @@
 // Parsing and validation for the buildings Excel import. Used by the Edge Function, its tests and
 // scripts/generate-template.ts, so the template and the importer cannot drift.
 
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+// @deno-types="xlsx/types"
 import * as XLSX from "xlsx";
 import { z } from "zod";
 

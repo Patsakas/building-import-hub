@@ -1,4 +1,4 @@
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+// @deno-types="xlsx/types"
 import * as XLSX from "xlsx";
 import { assertEquals, assertObjectMatch } from "@std/assert";
 import {
