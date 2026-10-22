@@ -11,5 +11,8 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // SPA mode: prerender the HTML shell at build time so .output/public is a complete static
+    // site (served by Firebase Hosting). Lovable's own build still gets its nitro worker.
+    spa: { enabled: true },
   },
 });
