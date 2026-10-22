@@ -1,0 +1,26 @@
+# Weekly dependency updates as pull requests, so they go through CI like any other change.
+# Security updates are enabled separately and are not delayed.
+version: 2
+updates:
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    # Supply-chain guard, in the spirit of bunfig.toml's minimumReleaseAge: let new releases age
+    # a week before proposing them, so a compromised version is likely caught and pulled first.
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
