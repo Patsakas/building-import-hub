@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { queryOptions, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { FunctionsHttpError } from "@supabase/supabase-js";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { buildingsQuery, importBuildingsFile, type ImportError } from "@/lib/buildings";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,18 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const buildingsQuery = queryOptions({
-  queryKey: ["buildings"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("buildings")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data;
-  },
-});
 
 export const Route = createFileRoute("/_authenticated/buildings")({
   head: () => ({
@@ -40,21 +28,6 @@ export const Route = createFileRoute("/_authenticated/buildings")({
   component: BuildingsPage,
 });
 
-// Mirrors the limit enforced by the import-buildings Edge Function, to fail fast before uploading.
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-
-type ImportError = { row: number | null; column: string | null; message: string };
-type ImportFailure = { message?: string; errors?: ImportError[]; errorCount?: number };
-
-async function readImportFailure(error: unknown): Promise<ImportFailure | null> {
-  if (!(error instanceof FunctionsHttpError)) return null;
-  try {
-    return (await error.context.json()) as ImportFailure;
-  } catch {
-    return null;
-  }
-}
-
 function BuildingsPage() {
   const { data: buildings } = useSuspenseQuery(buildingsQuery);
   const qc = useQueryClient();
@@ -67,34 +40,18 @@ function BuildingsPage() {
 
   async function onFile(file: File) {
     setRejected(null);
-    if (file.size > MAX_FILE_BYTES) {
-      toast.error("The file is larger than 5 MB.");
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
     setBusy(true);
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const { data, error } = await supabase.functions.invoke<{ inserted: number }>(
-        "import-buildings",
-        { body },
-      );
-      if (error) {
-        const failure = await readImportFailure(error);
-        if (failure?.errors?.length) {
-          setRejected({
-            errors: failure.errors,
-            errorCount: failure.errorCount ?? failure.errors.length,
-          });
-          toast.error("Nothing was imported. Fix the rows listed below and try again.");
-        } else {
-          toast.error(failure?.message ?? "The import failed. Please try again.");
+      const result = await importBuildingsFile(file);
+      if (!result.ok) {
+        toast.error(result.message);
+        if (result.errors.length > 0) {
+          setRejected({ errors: result.errors, errorCount: result.errorCount });
         }
         return;
       }
-      toast.success(`Imported ${data?.inserted ?? 0} buildings.`);
-      await qc.invalidateQueries({ queryKey: ["buildings"] });
+      toast.success(`Imported ${result.inserted} buildings.`);
+      await qc.invalidateQueries({ queryKey: buildingsQuery.queryKey });
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
