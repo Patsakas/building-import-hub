@@ -2,3 +2,5 @@
 * text=auto eol=lf
 *.ico binary
 *.xlsx binary
+# Vendored third-party code is stored byte for byte (CI checks it against SHA256SUMS).
+supabase/functions/_shared/vendor/** -text

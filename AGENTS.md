@@ -20,7 +20,9 @@ change that breaks them fails the build.
   them.
 - **Server-side logic goes in Supabase Edge Functions** under `supabase/functions/<name>/` (Deno),
   each with its own `deno.json`. Call them from the app with `supabase.functions.invoke`. Example:
-  `supabase/functions/import-buildings` handles the Excel import.
+  `supabase/functions/import-buildings` handles the Excel import. Import packages with `npm:` or
+  `jsr:` specifiers only: Supabase's bundler refuses most other hosts (such as `cdn.sheetjs.com`),
+  so a library that is only published elsewhere is vendored in `supabase/functions/_shared/vendor`.
 - **Every table has Row Level Security** with policies scoped to the signed-in user
   (`auth.uid()`). Never `USING (true)` for the `authenticated` or `anon` roles.
 - **Migrations are plain SQL, written twice.** Put each migration in `drizzle/migrations` (applied

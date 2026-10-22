@@ -82,7 +82,7 @@ Run the fast ones locally:
 bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build
 npx supabase test db
 deno test --config supabase/functions/import-buildings/deno.json \
-  --allow-import=cdn.sheetjs.com,jsr.io --allow-read=public supabase/functions/import-buildings
+  --allow-read=public supabase/functions/import-buildings
 ```
 
 The integration and end-to-end tests need the local stack: see `supabase/tests/functions` and

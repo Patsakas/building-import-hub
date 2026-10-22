@@ -2,7 +2,8 @@
   "imports": {
     "@std/assert": "jsr:@std/assert@1.0.19",
     "@supabase/server": "npm:@supabase/server@1.9.2",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
+    "xlsx": "../_shared/vendor/sheetjs-0.20.3/xlsx.mjs",
+    "xlsx/types": "../_shared/vendor/sheetjs-0.20.3/types/index.d.ts",
     "zod": "npm:zod@3.25.76"
   },
   "nodeModulesDir": "none"

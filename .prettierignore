@@ -17,3 +17,6 @@ src/routes/README.md
 
 # Generated lockfiles
 deno.lock
+
+# Third-party code, kept byte for byte (checked against SHA256SUMS in CI)
+supabase/functions/_shared/vendor/

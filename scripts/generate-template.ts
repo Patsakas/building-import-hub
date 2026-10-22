@@ -1,12 +1,11 @@
 // Writes public/buildings-template.xlsx from the importer's column list, so the template users
 // download always matches what the import-buildings Edge Function accepts.
 //
-//   deno run --config supabase/functions/import-buildings/deno.json \
-//     --allow-import=cdn.sheetjs.com --allow-write=public scripts/generate-template.ts
+//   deno run --config scripts/deno.json --allow-write=public scripts/generate-template.ts
 //
 // A Deno test (supabase/functions/import-buildings/buildings.test.ts) fails if the file drifts.
 
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+// @deno-types="xlsx/types"
 import * as XLSX from "xlsx";
 import {
   TEMPLATE_COLUMNS,

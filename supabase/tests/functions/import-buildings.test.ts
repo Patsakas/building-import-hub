@@ -2,10 +2,10 @@
 // (`supabase start` + `supabase db reset`, which loads the seed users). Run with:
 //
 //   SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=... deno test --config supabase/tests/functions/deno.json \
-//     --allow-net --allow-env --allow-import=cdn.sheetjs.com,jsr.io supabase/tests/functions
+//     --allow-net --allow-env supabase/tests/functions
 //
 // The seed users alice@test.local and bob@test.local share the password "password123".
-// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+// @deno-types="xlsx/types"
 import * as XLSX from "xlsx";
 import { assertEquals, assertExists } from "@std/assert";
 import { createClient, FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
