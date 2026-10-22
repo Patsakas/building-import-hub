@@ -18,9 +18,10 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+// Sign-in only: public sign-up is disabled in Supabase Auth and accounts are created by an
+// administrator (scripts/provision-user.ts).
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,20 +30,9 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        navigate({ to: "/buildings" });
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast.success("Check your email to confirm your account.");
-        setMode("signin");
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      navigate({ to: "/buildings" });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -57,9 +47,7 @@ function AuthPage() {
         className="w-full max-w-sm space-y-5 rounded-xl border bg-card p-8 shadow-sm"
       >
         <div>
-          <h1 className="text-2xl font-semibold">
-            {mode === "signin" ? "Sign in" : "Create account"}
-          </h1>
+          <h1 className="text-2xl font-semibold">Sign in</h1>
           <p className="text-sm text-muted-foreground">Buildings Registry</p>
         </div>
         <div className="space-y-2">
@@ -78,21 +66,16 @@ function AuthPage() {
             id="password"
             type="password"
             required
-            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Sign up"}
+          {busy ? "Please wait…" : "Sign in"}
         </Button>
-        <button
-          type="button"
-          className="w-full text-sm text-muted-foreground hover:text-foreground"
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-        >
-          {mode === "signin" ? "No account? Sign up" : "Have an account? Sign in"}
-        </button>
+        <p className="text-center text-sm text-muted-foreground">
+          Need access? Ask your administrator for an account.
+        </p>
       </form>
     </div>
   );
