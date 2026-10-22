@@ -1,17 +1,21 @@
 # Runs on every pull request and on every push to main and to the Lovable-synced branch,
-# so changes generated in Lovable get the same checks as hand-written ones.
+# so changes generated in Lovable get the same checks as hand-written ones. The Deploy workflow
+# also calls it, so nothing is deployed without passing the full suite on the same commit.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main, lovable]
+  workflow_call:
 
 permissions:
   contents: read
 
+# github.workflow is the caller's name when called from Deploy, so a deploy's CI run never
+# cancels (or is cancelled by) the regular CI run for the same commit.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -27,6 +31,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.x
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -58,6 +65,8 @@ jobs:
             grep -A3 '^var manifest' $files
             exit 1
           fi
+      - name: Verify the build contains no server-side secrets
+        run: deno run --allow-read scripts/check-bundle-secrets.ts .output/public
 
   edge-functions:
     name: Edge Functions
@@ -84,8 +93,43 @@ jobs:
               --allow-read=public --permit-no-files "$dir"
             echo "::endgroup::"
           done
+      - name: Lint and typecheck integration tests
+        run: |
+          config=supabase/tests/functions/deno.json
+          deno lint --config "$config" supabase/tests/functions
+          deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" supabase/tests/functions
       - name: Lint and typecheck scripts
         run: |
           config=supabase/functions/import-buildings/deno.json
           deno lint --config "$config" scripts
           deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" scripts/*.ts
+
+  database:
+    name: Database and integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.121.0
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.x
+
+      - name: Migrations are identical in drizzle/ (Lovable) and supabase/ (deployments)
+        run: deno run --allow-read scripts/check-migration-mirror.ts
+      # Applies every migration in supabase/migrations to an empty database, then seed.sql.
+      - name: Start a local Supabase stack
+        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
+      - name: Row Level Security tests (pgTAP)
+        run: supabase test db
+      - name: Edge Function integration tests
+        run: |
+          eval "$(supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
+          SUPABASE_URL="$API_URL" SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" \
+            deno test --frozen --config supabase/tests/functions/deno.json \
+              --allow-net --allow-env --allow-import=cdn.sheetjs.com,jsr.io supabase/tests/functions
+      - name: Edge runtime logs
+        if: failure()
+        run: docker logs "$(docker ps -q --filter name=supabase_edge_runtime)" 2>&1 | tail -100

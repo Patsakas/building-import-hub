@@ -8,6 +8,13 @@
       "when": 1792588944377,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792674000000,
+      "tag": "0001_harden_buildings",
+      "breakpoints": true
     }
   ]
 }
