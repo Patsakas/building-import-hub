@@ -104,8 +104,9 @@ Lovable ──sync──► lovable ──PR + CI──► main ──release vX
 | Production  | Firebase `building-import-hub-prod` | Supabase `building-import-hub-prod` | a published GitHub release, after approval |
 
 The Deploy workflow re-runs the whole CI suite on the release commit, then: checks the access
-token's permissions, applies the migrations, pushes the auth settings from
-`supabase/config.toml`, deploys the Edge Functions, builds the frontend for that environment (and
+token's permissions and that the environment's auth settings match `supabase/config.toml` (an
+administrator applies those; the deploy token cannot change them), applies the migrations,
+deploys the Edge Functions, builds the frontend for that environment (and
 verifies it does not point at Lovable's backend), deploys to Firebase Hosting through Workload
 Identity Federation (no stored Google keys) and smoke-tests the live site. Each environment's
 configuration lives in its GitHub environment; see `docs/RUNBOOK.md`.

@@ -1,6 +1,6 @@
 // Turns the [auth] settings declared in supabase/config.toml into a Supabase Management API
-// payload for PATCH /v1/projects/{ref}/config/auth. The deploy applies auth settings this way
-// rather than with `supabase config push`, which reads the project's whole configuration
+// payload for /v1/projects/{ref}/config/auth, used both to verify a deployed project and to apply
+// the settings to it. Not `supabase config push`, which reads the project's whole configuration
 // (storage, realtime, pooler, ...) and so needs a much broader access token.
 import { parse } from "@std/toml";
 
@@ -30,7 +30,7 @@ export function authConfigPayload(configToml: string, siteUrl: string): Payload 
     const map = MAPPINGS[key];
     if (!map) {
       throw new Error(
-        `${key} is set in supabase/config.toml but the deploy does not know how to apply it; ` +
+        `${key} is set in supabase/config.toml but deployed projects cannot be checked for it; ` +
           "add it to MAPPINGS in scripts/auth-config.ts.",
       );
     }

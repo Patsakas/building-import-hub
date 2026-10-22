@@ -21,7 +21,7 @@ Deno.test("only declared settings are applied", () => {
   });
 });
 
-Deno.test("an auth setting the deploy cannot apply fails loudly", () => {
+Deno.test("an auth setting the deploy cannot check fails loudly", () => {
   assertThrows(
     () => authConfigPayload("[auth]\njwt_expiry = 3600\n", SITE),
     Error,
