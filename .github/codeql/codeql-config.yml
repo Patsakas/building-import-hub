@@ -1,0 +1,8 @@
+name: CodeQL config
+
+# Third-party code we did not write. It is pinned to a release and checked byte for byte against
+# SHA256SUMS in CI, and upgraded when its upstream advisories call for it; scanning it here would
+# report the library's internals (SheetJS's XML text extraction, for example) as findings in our
+# code. See supabase/functions/_shared/vendor/*/README.md.
+paths-ignore:
+  - supabase/functions/_shared/vendor

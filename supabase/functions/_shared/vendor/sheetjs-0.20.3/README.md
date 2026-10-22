@@ -10,6 +10,8 @@ Why vendored: SheetJS publishes current versions only on its own CDN (the `xlsx`
 stopped at 0.18.5, which has known vulnerabilities), and Supabase's Edge Function bundler refuses
 imports from that host.
 
-CI checks the files against `SHA256SUMS`. To upgrade, download the new version's files into a new
+CI checks the files against `SHA256SUMS`, and CodeQL does not scan them
+(`.github/codeql/codeql-config.yml`): its findings here are in SheetJS's own XML text extraction,
+whose output the importer validates and stores as plain data. To upgrade, download the new version's files into a new
 `sheetjs-<version>` directory, regenerate the sums (`sha256sum xlsx.mjs types/index.d.ts LICENSE >
 SHA256SUMS`), and point the `xlsx` and `xlsx/types` entries of each `deno.json` at it.
