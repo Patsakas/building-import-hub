@@ -100,11 +100,13 @@ jobs:
           config=supabase/tests/functions/deno.json
           deno lint --config "$config" supabase/tests/functions
           deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" supabase/tests/functions
-      - name: Lint and typecheck scripts
+      - name: Lint, typecheck and test scripts
         run: |
-          config=supabase/functions/import-buildings/deno.json
+          config=scripts/deno.json
           deno lint --config "$config" scripts
           deno check --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" scripts/*.ts
+          deno test --frozen --config "$config" --allow-import="$ALLOWED_IMPORTS" \
+            --allow-read=supabase,public scripts
 
   database:
     name: Database and integration

@@ -1,8 +1,9 @@
 project_id = "svfcfhhjvweaexspekwe"
 
-# Applied to hosted projects with `supabase config push`, which only changes the properties
-# declared here. Keep this file to settings that are the same in every environment; per-environment
-# values (site_url, redirect URLs) are set by the deploy workflow.
+# The [auth] settings below are applied to the deployed projects by scripts/apply-auth-config.ts
+# (which fails on any setting it cannot map), and verify_jwt by `supabase functions deploy`. Keep
+# this file to settings that are the same in every environment; per-environment values (site_url,
+# redirect URLs) come from the deploy workflow.
 
 [auth]
 # No public sign-up: accounts are created by an admin (see scripts/provision-user.ts).
