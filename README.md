@@ -68,8 +68,10 @@ CI (`.github/workflows/ci.yml`) runs on every pull request and every push to `ma
 `main` only accepts pull requests with all three jobs green.
 
 - **Frontend:** Prettier, ESLint (which forbids `createServerFn`), TypeScript, Vitest and the build.
-  The build must be a static site with an empty server function manifest, and must not contain a
-  server-side secret (a secret key, a `service_role` JWT or a private key).
+  The build must be a static site with an empty server function manifest, must not contain a
+  server-side secret (a secret key, a `service_role` JWT or a private key), and gets a Content
+  Security Policy computed from its own inline scripts (`scripts/csp.ts`), which the end-to-end
+  tests run under.
 - **Edge Functions:** `deno lint`, `deno check` and `deno test` for every function, with frozen
   lockfiles.
 - **Database and integration:** migrations identical in `drizzle/` and `supabase/`; a fresh

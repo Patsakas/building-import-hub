@@ -118,10 +118,14 @@ jobs:
       - name: Deploy Edge Functions
         run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
 
+      # The Content Security Policy is computed from this build (its inline scripts change between
+      # builds) and only lets the page talk to this environment's Supabase project.
       - name: Build the frontend for this environment
         run: |
           bun install --frozen-lockfile
           bun run build
+          deno run --frozen --config scripts/deno.json --allow-read=.output --allow-write=.output \
+            scripts/add-csp.ts "$VITE_SUPABASE_URL"
       # The committed .env points at Lovable's backend; the variables above must win.
       - name: Verify the bundle targets this environment
         run: |
@@ -151,6 +155,10 @@ jobs:
           curl -fsS "$SITE_URL/buildings" | grep -q "_TSR" || fail "SPA route /buildings did not load"
           curl -fsSI "$SITE_URL/buildings-template.xlsx" > /dev/null || fail "Excel template missing"
           curl -fsSI "$SITE_URL/" | grep -qi "^x-frame-options: DENY" || fail "Security headers missing"
+          curl -fsSI "$SITE_URL/" | grep -qi "^content-security-policy: frame-ancestors 'none'" \
+            || fail "Content-Security-Policy header missing"
+          curl -fsS "$SITE_URL/buildings" | grep -aq "connect-src 'self' $VITE_SUPABASE_URL;" \
+            || fail "The page's Content Security Policy is missing or does not allow $VITE_SUPABASE_URL"
           status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$VITE_SUPABASE_URL/functions/v1/import-buildings" \
             -H "apikey: $VITE_SUPABASE_PUBLISHABLE_KEY")
           [ "$status" = "401" ] || fail "import-buildings should reject anonymous calls with 401, got $status"

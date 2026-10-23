@@ -69,6 +69,12 @@ jobs:
           fi
       - name: Verify the build contains no server-side secrets
         run: deno run --allow-read scripts/check-bundle-secrets.ts .output/public
+      # Fails if the page gained something a Content Security Policy cannot allow by hash (inline
+      # event handlers, javascript: URLs). The Supabase URL only matters for deployed builds.
+      - name: Add the Content Security Policy
+        run: >-
+          deno run --frozen --config scripts/deno.json --allow-read=.output --allow-write=.output
+          scripts/add-csp.ts https://example.supabase.co
 
   edge-functions:
     name: Edge Functions
@@ -148,13 +154,16 @@ jobs:
             deno test --frozen --config supabase/tests/functions/deno.json \
               --allow-net --allow-env --allow-import=jsr.io supabase/tests/functions
 
-      # End-to-end: the static build against the local stack, served by the Firebase Hosting
-      # emulator with the production rewrites, driven by Playwright.
+      # End-to-end: the static build against the local stack, with the production Content Security
+      # Policy, served by the Firebase Hosting emulator with the production rewrites, driven by
+      # Playwright (which fails a test on any CSP violation).
       - name: Build the frontend against the local stack
         run: |
           eval "$(supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
           bun install --frozen-lockfile
           VITE_SUPABASE_URL="$API_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" bun run build
+          deno run --frozen --config scripts/deno.json --allow-read=.output --allow-write=.output \
+            scripts/add-csp.ts "$API_URL"
       - name: Serve it with the Firebase Hosting emulator
         run: |
           npx -y firebase-tools@15.34.1 emulators:start --only hosting --project demo-e2e > hosting.log 2>&1 &
