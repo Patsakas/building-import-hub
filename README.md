@@ -5,7 +5,11 @@ app was generated with [Lovable](https://lovable.dev) and then made production-r
 it out of Lovable: business users can keep building in Lovable while every change goes through the
 same automated checks before it reaches production.
 
-**Production:** https://building-import-hub-prod.web.app
+**Production:** https://building-import-hub-prod.web.app ·
+**Staging:** https://building-import-hub-staging.web.app ·
+**Write-up:** [`docs/WRITEUP.md`](docs/WRITEUP.md) (SSR decision, deployment choices, issues and
+fixes, and the [guardrail demos](https://github.com/Patsakas/building-import-hub/pulls?q=label%3Aguardrail-demo):
+deliberately broken pull requests that CI stopped)
 
 ## Architecture
 
