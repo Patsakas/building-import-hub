@@ -2,6 +2,8 @@
 # Firebase Hosting, followed by a smoke test of the live site. The full CI suite runs first on the
 # same commit, and nothing changes unless the access token and the auth settings check out.
 #
+#   push to main       -> staging (no approval: every merged change runs on real infrastructure
+#                         first, with data that survives between deploys)
 #   release published  -> production (the "production" environment requires an approval)
 #   manual run         -> the environment you pick
 #
@@ -15,6 +17,8 @@
 name: Deploy
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
@@ -38,10 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
-      name: ${{ github.event_name == 'release' && 'production' || inputs.environment }}
+      name: ${{ github.event_name == 'push' && 'staging' || github.event_name == 'release' && 'production' || inputs.environment }}
       url: ${{ vars.SITE_URL }}
     concurrency:
-      group: deploy-${{ github.event_name == 'release' && 'production' || inputs.environment }}
+      group: deploy-${{ github.event_name == 'push' && 'staging' || github.event_name == 'release' && 'production' || inputs.environment }}
       cancel-in-progress: false
     permissions:
       contents: read
