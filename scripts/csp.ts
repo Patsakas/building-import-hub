@@ -30,7 +30,11 @@ export async function contentSecurityPolicy(html: string, supabaseUrl: string): 
   // Inline event handlers and script URLs cannot be allowed by hash; keep them out of the shell.
   for (const element of document.querySelectorAll("*")) {
     for (const name of element.getAttributeNames()) {
-      const value = (element.getAttribute(name) ?? "").replace(/[\s\0-\x1f]/g, "").toLowerCase();
+      // Browsers ignore spaces and control characters in a URL's scheme ("java\tscript:").
+      const value = [...(element.getAttribute(name) ?? "")]
+        .filter((character) => character > " ")
+        .join("")
+        .toLowerCase();
       if (name.toLowerCase().startsWith("on") || /^(javascript|vbscript|data):/.test(value)) {
         throw new Error(
           `<${element.localName} ${name}> is an inline event handler or script URL, which the CSP blocks.`,
