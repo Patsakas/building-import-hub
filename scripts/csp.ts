@@ -6,15 +6,17 @@
 // <meta> tag the policy also applies in the Firebase Hosting emulator, which ignores custom
 // headers, so the end-to-end tests run under it. (frame-ancestors cannot be set from a <meta> tag;
 // firebase.json sends it as a header.)
+//
+// The page is read with a spec-compliant HTML parser (html5ever), not regular expressions, so each
+// script's text is exactly what a browser hashes: the parser decides where a script ends,
+// normalizes line endings and turns NUL characters (TanStack's hydration data contains one) into
+// U+FFFD, as browsers do.
+import { DOMParser, type HTMLDocument } from "@b-fuze/deno-dom";
 
-const INLINE_SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-const META = '<meta http-equiv="Content-Security-Policy"';
-export const REPLACEMENT_CHARACTER = String.fromCharCode(0xfffd);
+const META_SELECTOR = 'meta[http-equiv="Content-Security-Policy" i]';
 
-/** The text a browser hashes for an inline script: the HTML parser normalizes line endings and
- * replaces NUL characters (TanStack's hydration data contains one) with U+FFFD. */
-function parsedText(raw: string): string {
-  return raw.replace(/\r\n?/g, "\n").replaceAll("\0", REPLACEMENT_CHARACTER);
+function parse(html: string): HTMLDocument {
+  return new DOMParser().parseFromString(html, "text/html");
 }
 
 async function sha256(text: string): Promise<string> {
@@ -24,16 +26,21 @@ async function sha256(text: string): Promise<string> {
 
 /** The policy for this page, allowing its inline scripts and the Supabase project it talks to. */
 export async function contentSecurityPolicy(html: string, supabaseUrl: string): Promise<string> {
-  // Inline event handlers and javascript: URLs cannot be allowed by hash; keep them out of the shell.
-  if (/<[^>]+\son[a-z]+\s*=|javascript:/i.test(html.replace(INLINE_SCRIPT, ""))) {
-    throw new Error(
-      "The page has an inline event handler or javascript: URL, which the CSP blocks.",
-    );
+  const document = parse(html);
+  // Inline event handlers and script URLs cannot be allowed by hash; keep them out of the shell.
+  for (const element of document.querySelectorAll("*")) {
+    for (const name of element.getAttributeNames()) {
+      const value = (element.getAttribute(name) ?? "").replace(/[\s\0-\x1f]/g, "").toLowerCase();
+      if (name.toLowerCase().startsWith("on") || /^(javascript|vbscript|data):/.test(value)) {
+        throw new Error(
+          `<${element.localName} ${name}> is an inline event handler or script URL, which the CSP blocks.`,
+        );
+      }
+    }
   }
   const hashes: string[] = [];
-  for (const [, attributes, body] of html.matchAll(INLINE_SCRIPT)) {
-    if (/\bsrc\s*=/i.test(attributes!) || !body) continue;
-    hashes.push(`'sha256-${await sha256(parsedText(body))}'`);
+  for (const script of document.querySelectorAll("script:not([src])")) {
+    if (script.textContent) hashes.push(`'sha256-${await sha256(script.textContent)}'`);
   }
   return [
     "default-src 'self'",
@@ -52,10 +59,19 @@ export async function contentSecurityPolicy(html: string, supabaseUrl: string): 
 
 /** The page with its policy as the first element of <head>, so it covers everything after it. */
 export async function addContentSecurityPolicy(html: string, supabaseUrl: string): Promise<string> {
-  if (html.includes(META)) throw new Error("The page already has a Content Security Policy.");
+  if (parse(html).querySelector(META_SELECTOR)) {
+    throw new Error("The page already has a Content Security Policy.");
+  }
   const head = html.match(/<head(\s[^>]*)?>/i);
   if (!head) throw new Error("The page has no <head>.");
   const at = head.index! + head[0].length;
   const policy = await contentSecurityPolicy(html, supabaseUrl);
-  return `${html.slice(0, at)}${META} content="${policy}"/>${html.slice(at)}`;
+  const page = `${html.slice(0, at)}<meta http-equiv="Content-Security-Policy" content="${policy}"/>${html.slice(at)}`;
+
+  // Read the result back the way a browser will, to be sure the policy landed where it applies.
+  const meta = parse(page).head?.firstElementChild;
+  if (!meta?.matches(META_SELECTOR) || meta.getAttribute("content") !== policy) {
+    throw new Error("The policy did not end up as the first element of <head>.");
+  }
+  return page;
 }

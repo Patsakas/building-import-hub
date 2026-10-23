@@ -1,7 +1,8 @@
 import { assertEquals, assertMatch, assertRejects, assertStringIncludes } from "@std/assert";
-import { addContentSecurityPolicy, contentSecurityPolicy, REPLACEMENT_CHARACTER } from "./csp.ts";
+import { addContentSecurityPolicy, contentSecurityPolicy } from "./csp.ts";
 
 const SUPABASE = "https://abcdefghijklmnopqrst.supabase.co";
+const REPLACEMENT_CHARACTER = String.fromCharCode(0xfffd);
 
 async function hash(text: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -21,16 +22,13 @@ Deno.test("allows each inline script by hash, and no other inline script", async
   );
 });
 
-Deno.test(
-  "hashes scripts as the browser parses them (NUL becomes U+FFFD, CRLF becomes LF)",
-  async () => {
-    const html = `<head><script>x("\0");\r\ny()</script></head>`;
-    assertStringIncludes(
-      await contentSecurityPolicy(html, SUPABASE),
-      `'sha256-${await hash(`x("${REPLACEMENT_CHARACTER}");\ny()`)}'`,
-    );
-  },
-);
+Deno.test("hashes scripts as the browser parses them", async () => {
+  // NUL becomes U+FFFD and CRLF becomes LF; an end tag may carry whitespace and junk attributes.
+  const html = `<head><script>x("\0");\r\ny()</script\t\n bar><script>z()</script></head>`;
+  const policy = await contentSecurityPolicy(html, SUPABASE);
+  assertStringIncludes(policy, `'sha256-${await hash(`x("${REPLACEMENT_CHARACTER}");\ny()`)}'`);
+  assertStringIncludes(policy, `'sha256-${await hash("z()")}'`);
+});
 
 Deno.test("only lets the page connect to itself and its Supabase project", async () => {
   const policy = await contentSecurityPolicy("<head></head>", `${SUPABASE}/`);
@@ -39,12 +37,14 @@ Deno.test("only lets the page connect to itself and its Supabase project", async
   assertEquals(directive(policy, "script-src"), "script-src 'self'");
 });
 
-Deno.test("refuses inline event handlers and javascript: URLs", async () => {
+Deno.test("refuses inline event handlers and script URLs", async () => {
   for (const html of [
     '<head></head><button onclick="x()">',
-    '<head></head><a href="javascript:x()">',
+    '<head></head><img src="/a.png" ONERROR="x()">',
+    '<head></head><a href=" java\tscript:x()">',
+    '<head></head><iframe src="data:text/html,x"></iframe>',
   ]) {
-    await assertRejects(() => contentSecurityPolicy(html, SUPABASE), Error, "inline event handler");
+    await assertRejects(() => contentSecurityPolicy(html, SUPABASE), Error, "which the CSP blocks");
   }
 });
 
