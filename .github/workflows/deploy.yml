@@ -1,6 +1,7 @@
 # Deploys one environment: database migrations, the Edge Functions, then the static frontend to
 # Firebase Hosting, followed by a smoke test of the live site. The full CI suite runs first on the
-# same commit, and nothing changes unless the access token and the auth settings check out.
+# same commit, and nothing changes unless the access token, the auth settings and the frontend
+# build all check out.
 #
 #   push to main       -> staging (no approval: every merged change runs on real infrastructure
 #                         first, with data that survives between deploys)
@@ -70,6 +71,10 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.9.x
@@ -105,19 +110,8 @@ jobs:
           deno run --frozen --config scripts/deno.json --allow-read=supabase --allow-env
           --allow-net=api.supabase.com scripts/apply-auth-config.ts --check
 
-      # Backend first: the new frontend may depend on new tables or functions, never the reverse.
-      # Migrations go straight to Postgres through the IPv4 session pooler (runners have no IPv6),
-      # so the API token needs no database permissions at all.
-      - name: Apply database migrations
-        run: |
-          password=$(jq -rn --arg p "$SUPABASE_DB_PASSWORD" '$p | @uri')
-          echo "::add-mask::$password" # the encoded form differs from the masked secret
-          db_url="postgresql://postgres.$SUPABASE_PROJECT_REF:$password@$SUPABASE_DB_POOLER_HOST:5432/postgres"
-          supabase db push --db-url "$db_url" --dry-run
-          supabase db push --db-url "$db_url" --yes
-      - name: Deploy Edge Functions
-        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
-
+      # The frontend is built before anything is deployed: the build needs nothing from the backend,
+      # and a failure here (a package registry outage, say) then leaves every environment untouched.
       # The Content Security Policy is computed from this build (its inline scripts change between
       # builds) and only lets the page talk to this environment's Supabase project.
       - name: Build the frontend for this environment
@@ -135,6 +129,19 @@ jobs:
           if [ "$lovable_ref" != "$VITE_SUPABASE_PROJECT_ID" ] && grep -rqF "$lovable_ref" .output/public/assets; then
             echo "::error::The bundle still references the Lovable backend ($lovable_ref)"; exit 1
           fi
+
+      # Backend before frontend: the new frontend may depend on new tables or functions, never the
+      # reverse. Migrations go straight to Postgres through the IPv4 session pooler (runners have no
+      # IPv6), so the API token needs no database permissions at all.
+      - name: Apply database migrations
+        run: |
+          password=$(jq -rn --arg p "$SUPABASE_DB_PASSWORD" '$p | @uri')
+          echo "::add-mask::$password" # the encoded form differs from the masked secret
+          db_url="postgresql://postgres.$SUPABASE_PROJECT_REF:$password@$SUPABASE_DB_POOLER_HOST:5432/postgres"
+          supabase db push --db-url "$db_url" --dry-run
+          supabase db push --db-url "$db_url" --yes
+      - name: Deploy Edge Functions
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF" --use-api
 
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:

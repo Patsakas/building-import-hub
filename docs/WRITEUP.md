@@ -53,10 +53,11 @@ manifest.
   - **Approval:** production needs a named reviewer, and deploys only from `main` or `v*` tags.
 - **The deploy job**, in order:
   1. Runs the full CI suite again on the same commit.
-  2. Checks the token's permissions, then the auth settings. Nothing changes if either fails.
-  3. Applies the migrations, then deploys the Edge Functions.
-  4. Builds the frontend for the environment and checks the bundle targets it.
-  5. Deploys to Firebase.
+  2. Checks the token's permissions, then the auth settings.
+  3. Builds the frontend for the environment and checks the bundle targets it. Nothing has
+     changed yet, so a failure up to here leaves the environment untouched.
+  4. Applies the migrations, then deploys the Edge Functions.
+  5. Deploys the frontend to Firebase.
   6. Smoke-tests the live site: pages, headers, CSP, a 401 from the function for anonymous
      requests, and sign-up disabled.
 - **Security.** Highlights only; the PRs have the details.

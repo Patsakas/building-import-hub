@@ -117,9 +117,10 @@ staging.
 
 The Deploy workflow re-runs the whole CI suite on the commit, then: checks the access
 token's permissions and that the environment's auth settings match `supabase/config.toml` (an
-administrator applies those; the deploy token cannot change them), applies the migrations,
-deploys the Edge Functions, builds the frontend for that environment (and
-verifies it does not point at Lovable's backend), deploys to Firebase Hosting through Workload
+administrator applies those; the deploy token cannot change them), builds the frontend for that
+environment (and verifies it does not point at Lovable's backend), so that a failed check or build
+changes nothing, then applies the migrations, deploys the Edge Functions, deploys the frontend to
+Firebase Hosting through Workload
 Identity Federation (no stored Google keys) and smoke-tests the live site. Each environment's
 configuration lives in its GitHub environment; see `docs/RUNBOOK.md`.
 
