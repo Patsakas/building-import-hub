@@ -31,9 +31,8 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
-      # Packages are downloaded once per lockfile, not on every job: about a hundred come from
-      # Lovable's npm cache, which rate-limits busy days (429). The key is the lockfile's hash, so
-      # any dependency change downloads afresh.
+      # Packages are downloaded once per lockfile, not on every job. The key is the lockfile's hash,
+      # so any dependency change downloads afresh.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
@@ -42,8 +41,12 @@ jobs:
         with:
           deno-version: v2.9.x
 
+      # Lovable's npm cache rate-limits GitHub runners; see the script for why the public registry
+      # is equivalent.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bash scripts/use-public-npm-registry.sh
+          bun install --frozen-lockfile
       - name: The committed .env holds only public settings
         run: deno run --allow-read --allow-run=git scripts/check-env-file.ts
       - name: Check formatting
@@ -171,6 +174,7 @@ jobs:
       - name: Build the frontend against the local stack
         run: |
           eval "$(supabase status -o env | grep -E '^(API_URL|PUBLISHABLE_KEY)=')"
+          bash scripts/use-public-npm-registry.sh
           bun install --frozen-lockfile
           VITE_SUPABASE_URL="$API_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" bun run build
           deno run --frozen --config scripts/deno.json --allow-read=.output --allow-write=.output \

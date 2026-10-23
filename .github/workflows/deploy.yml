@@ -116,6 +116,7 @@ jobs:
       # builds) and only lets the page talk to this environment's Supabase project.
       - name: Build the frontend for this environment
         run: |
+          bash scripts/use-public-npm-registry.sh
           bun install --frozen-lockfile
           bun run build
           deno run --frozen --config scripts/deno.json --allow-read=.output --allow-write=.output \
