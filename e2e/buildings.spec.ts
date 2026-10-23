@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 // Seed users from supabase/seed.sql (local stack only).
 const PASSWORD = "password123";
@@ -15,6 +16,17 @@ async function signIn(page: Page, email: string) {
 function csv(name: string, text: string) {
   return { name, mimeType: "text/csv", buffer: Buffer.from(text) };
 }
+
+test("the page carries a Content Security Policy for its own scripts and Supabase", async ({
+  page,
+}) => {
+  await page.goto("/auth");
+  const policy = await page
+    .locator('meta[http-equiv="Content-Security-Policy"]')
+    .getAttribute("content");
+  expect(policy).toMatch(/script-src 'self'( 'sha256-[A-Za-z0-9+/]+=*')+;/);
+  expect(policy).toMatch(/connect-src 'self' https?:\/\/[^ ;]+;/);
+});
 
 test("the sign-in page offers no public sign-up", async ({ page }) => {
   await page.goto("/auth");

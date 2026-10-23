@@ -33,6 +33,10 @@ change that breaks them fails the build.
   frontend. Never import `src/integrations/supabase/client.server.ts` (service role) from app code.
   The committed `.env` is public: it may only hold the Supabase URL, project id and publishable key.
   Secrets go in Supabase (Edge Function secrets) or in GitHub environment secrets, never in a file.
+- **The page runs under a strict Content Security Policy** (`scripts/csp.ts`): only the app's own
+  scripts and styles, and network calls only to its Supabase project. Do not add scripts, fonts,
+  images or APIs from other hosts, inline `onclick`-style handlers or `javascript:` links; if the
+  app genuinely needs another host, allow it in `scripts/csp.ts` in the same change.
 - **The Excel template is generated.** `public/buildings-template.xlsx` comes from
   `scripts/generate-template.ts`, which uses the importer's column list. Regenerate it instead of
   editing it by hand.
