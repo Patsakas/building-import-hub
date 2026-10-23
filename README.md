@@ -92,18 +92,24 @@ The integration and end-to-end tests need the local stack: see `supabase/tests/f
 
 ```
 Lovable ──sync──► lovable ──PR + CI──► main ──release vX.Y.Z + approval──► production
-                     ▲                   │
-                     └── Sync workflow ──┘
+                     ▲                   │ │
+                     └── Sync workflow ──┘ └──every merge──► staging
 ```
 
-| Environment | Frontend                            | Backend                             | Deployed by                                |
-| ----------- | ----------------------------------- | ----------------------------------- | ------------------------------------------ |
-| Lovable     | Lovable preview                     | Lovable's built-in backend          | Lovable                                    |
-| Local       | `bun run dev`                       | `npx supabase start`                | you                                        |
-| CI          | build + Firebase Hosting emulator   | Supabase stack in the runner        | every pull request and push                |
-| Production  | Firebase `building-import-hub-prod` | Supabase `building-import-hub-prod` | a published GitHub release, after approval |
+| Environment | Frontend                               | Backend                                | Deployed by                                |
+| ----------- | -------------------------------------- | -------------------------------------- | ------------------------------------------ |
+| Lovable     | Lovable preview                        | Lovable's built-in backend             | Lovable                                    |
+| Local       | `bun run dev`                          | `npx supabase start`                   | you                                        |
+| CI          | build + Firebase Hosting emulator      | Supabase stack in the runner           | every pull request and push                |
+| Staging     | Firebase `building-import-hub-staging` | Supabase `building-import-hub-staging` | every merge to `main`                      |
+| Production  | Firebase `building-import-hub-prod`    | Supabase `building-import-hub-prod`    | a published GitHub release, after approval |
 
-The Deploy workflow re-runs the whole CI suite on the release commit, then: checks the access
+Staging is a copy of production on the same services, so it catches what a local stack cannot:
+Supabase's hosted bundler and API permissions, the real auth settings, and migrations applied to a
+database that already holds data. A release is cut from a `main` commit that is already live on
+staging.
+
+The Deploy workflow re-runs the whole CI suite on the commit, then: checks the access
 token's permissions and that the environment's auth settings match `supabase/config.toml` (an
 administrator applies those; the deploy token cannot change them), applies the migrations,
 deploys the Edge Functions, builds the frontend for that environment (and

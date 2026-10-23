@@ -2,17 +2,21 @@
 
 Operational procedures for Building Import Hub. Commands assume the repository root.
 
-## Deploy to production
+## Deploy
 
-1. Merge the changes to `main` (pull request, all checks green).
-2. Create a GitHub release on `main` with a new tag (`v1.2.0`). Its notes say what changed.
-3. The **Deploy** workflow starts, re-runs CI on that commit, then waits for approval: open the run,
-   _Review deployments_ → `production` → _Approve and deploy_.
-4. The run ends with a smoke test of the live site. A red smoke test means the new version is live
+1. Merge the changes to `main` (pull request, all checks green). The **Deploy** workflow deploys
+   that commit to **staging** on its own: https://building-import-hub-staging.web.app.
+2. Try the change on staging. If its deploy failed, fix it on `main` first: production would fail
+   the same way.
+3. Create a GitHub release on that `main` commit with a new tag (`v1.2.0`). Its notes say what
+   changed.
+4. The **Deploy** workflow starts again, re-runs CI on that commit, then waits for approval: open
+   the run, _Review deployments_ → `production` → _Approve and deploy_.
+5. The run ends with a smoke test of the live site. A red smoke test means the new version is live
    but broken: roll back (below).
 
-A manual run (_Actions → Deploy → Run workflow_) deploys the selected branch or tag to the chosen
-environment, with the same checks and approval.
+A manual run (_Actions → Deploy → Run workflow_) deploys `main` (staging, production) or a `v*` tag
+(production) to the chosen environment, with the same checks and, for production, the approval.
 
 ## Roll back
 
@@ -43,13 +47,15 @@ them (foreign key `on delete cascade`).
 
 ## Credentials
 
-| Credential              | Where                                     | Scope                                                                                                                                              | Rotation                                                                                                       |
-| ----------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `SUPABASE_ACCESS_TOKEN` | GitHub environment secret                 | One project. Project Settings and Auth Config read, Edge Functions read-write; nothing else (no database, API key or signing key access).          | Expires after 90 days: generate a new one with the same permissions, replace the secret, delete the old token. |
-| Admin access token      | nowhere: created when needed              | One project. Project Settings and Auth Config read-write, only to change auth settings (below)                                                     | Shortest expiry; deleted right after use.                                                                      |
-| `SUPABASE_DB_PASSWORD`  | GitHub environment secret                 | Postgres, used only to apply migrations                                                                                                            | Reset in _Project Settings → Database_, then update the secret.                                                |
-| Google Cloud            | none stored                               | Workload Identity Federation: only this repository's `production` environment can act as `github-deployer`, which can only deploy Firebase Hosting | Nothing to rotate.                                                                                             |
-| Publishable key         | GitHub environment variable, in the build | Public by design; RLS protects the data                                                                                                            | Rotate in Supabase if needed, update the variable, redeploy.                                                   |
+Each environment (staging, production) has its own set; none is shared between them.
+
+| Credential              | Where                                     | Scope                                                                                                                                          | Rotation                                                                                                       |
+| ----------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_ACCESS_TOKEN` | GitHub environment secret                 | One project. Project Settings and Auth Config read, Edge Functions read-write; nothing else (no database, API key or signing key access).      | Expires after 90 days: generate a new one with the same permissions, replace the secret, delete the old token. |
+| Admin access token      | nowhere: created when needed              | One project. Project Settings and Auth Config read-write, only to change auth settings (below)                                                 | Shortest expiry; deleted right after use.                                                                      |
+| `SUPABASE_DB_PASSWORD`  | GitHub environment secret                 | Postgres, used only to apply migrations                                                                                                        | Reset in _Project Settings → Database_, then update the secret.                                                |
+| Google Cloud            | none stored                               | Workload Identity Federation: only this repository's matching environment can act as `github-deployer`, which can only deploy Firebase Hosting | Nothing to rotate.                                                                                             |
+| Publishable key         | GitHub environment variable, in the build | Public by design; RLS protects the data                                                                                                        | Rotate in Supabase if needed, update the variable, redeploy.                                                   |
 
 The deploy job's first step checks the access token: it calls every Management API endpoint the
 deploy uses, prints the status of each and stops before changing anything if one is missing.
@@ -78,7 +84,10 @@ project. An administrator applies them:
 
 When a pull request changes these settings, apply them right after merging it.
 
-### Workload Identity Federation (how production was set up)
+### Workload Identity Federation (how each environment was set up)
+
+Shown for production; staging is the same with `P=building-import-hub-staging` and
+`assertion.environment == 'staging'`. Each Google project trusts only its own environment.
 
 ```sh
 P=building-import-hub-prod
@@ -104,16 +113,20 @@ gcloud iam service-accounts add-iam-policy-binding github-deployer@$P.iam.gservi
 Repository and owner ids come from `gh api repos/<owner>/<repo> --jq '.id, .owner.id'`. Pinning
 ids rather than names means a repository recreated under the same name cannot deploy.
 
-## Add an environment (for example staging)
+## Add an environment
+
+Staging was set up this way.
 
 1. Create a Supabase project and a Firebase project (Spark plan; open _Hosting → Get started_ once
    so the default site exists).
 2. Repeat the Workload Identity Federation setup for the new Google project, with
-   `assertion.environment == 'staging'`.
+   `assertion.environment == '<name>'`.
 3. Create a GitHub environment with the variables and secrets listed at the top of
-   `.github/workflows/deploy.yml`. Generate a separate access token scoped to the new project.
+   `.github/workflows/deploy.yml`, restricted to deploy from `main` (and `v*` tags if releases go
+   there). Generate a separate access token scoped to the new project.
 4. Apply the auth settings to the new project (see _Change auth settings_).
-5. Run the Deploy workflow for it.
+5. Run the Deploy workflow for it, and add a trigger in `.github/workflows/deploy.yml` if it should
+   deploy on its own.
 
 ## Troubleshooting
 
