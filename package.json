@@ -17,6 +17,7 @@
     "test:e2e": "playwright test"
   },
   "overrides": {
+    "launch-editor": "^2.14.2",
     "rolldown": "1.2.1"
   },
   "dependencies": {
